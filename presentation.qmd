@@ -1,0 +1,996 @@
+---
+title: "Test For Independence"
+author: "Arpan Dutta, Debanjan Bhattacharjee, Soumyajit Roy"
+format: 
+  revealjs:
+    code-fold: true 
+    theme: serif
+    scrollable: true
+    transition: slide
+    footer: Indian Statistical Institute
+    
+fontsize: 2em
+ 
+execute:
+   echo: false
+editor: visual
+---
+
+## Library
+
+```{r}
+require(car) #for qqPlot()
+require(kableExtra) # for printing tables
+require(MASS) #for generaing bivariate normal sample
+library(fMultivar) #for bivariate t sample
+library(copula) # for generating samples from copula
+library(extraDistr) #for laplace distribution
+
+
+```
+
+::: callout-tip
+## used libraries
+
+-   `require(car)` #for qqPlot()
+-   `require(kableExtra)` # for printing tables
+-   `require(MASS)` #for generaing bivariate normal sample
+-   `require(fMultivar)` #for bivariate t sample
+-   `require(copula)` # for generating samples from copula
+-   `require(extraDistr)` #for laplace distribution
+:::
+
+## Problem Statement
+
+Our main aim is to check if we have paired observations ,we want to check whether the corresponding variables are independent or not. </span>
+
+### Example:
+
+1.  Say we have data on a shop's pop-corn sell and cold drinks sell of a movie.We want to check whether there is a relationship between these two i.e is person who buy pop-corn also buys cold-drinks?
+
+# <font color="dark yellow"> kendall's $\tau$ </font>
+
+## Kendall's $\tau$
+
+$(X_1,Y_1),(X_2,Y_2),\ldots(X_n,Y_n)\hspace{0.5cm}iid\hspace{0.5cm} F(x,y)$ (Continuous)
+
+kendall's $\tau$ is defined as
+
+$$\mathcal{\tau} = \dfrac{1}{\binom n2}\sum_{i = 1}^{n-1}\sum_{j = i+1}^{n}sign(X_i - X_j)sign(Y_i - Y_j)    $$ where, $$
+\begin{equation}
+sign(u)=
+    \begin{cases}
+        0 & \text{if } u = 0\\
+        \dfrac{\left|u\right|}{u} & \text{if } u \neq 0
+    \end{cases}
+\end{equation} $$
+
+```{r,echo=FALSE}
+
+ktao = function(n,size = 1000,dist1,dist2){
+  
+  
+  kt = NULL
+  for(m in 1:size){
+    
+    x = dist1(n)
+    y = dist2(n)
+    
+    k = 1
+    store = NULL
+    for(i in 1:(n-1)){
+      for(j in (i+1):n){
+        store[k] = sign(x[i]-x[j])*sign(y[i]-y[j])
+        k = k+1
+      }
+    }
+  kt[m] = sum(store)/choose(n,2)
+    }
+    
+kt}
+```
+
+## Another form
+
+Let, A := concordant pairs B := discordant pairs
+
+$$ \tau = \dfrac{A - B}{\binom n2} $$ In general:
+
+$$ -1 \leq \tau \leq 1$$
+
+## Visualisation
+
+We present a visual explanation of choosing such a function as a measure of dependency.
+
+```{r}
+
+
+par(mfrow=c(1,3))
+for(r in c(-0.7,0,0.7)){
+  data=mvrnorm(n=1000,mu=c(0,0),Sigma = cbind(c(1,r),c(r,1)))
+  plot(data[,1],data[,2],col = ifelse(data[,1]*data[,2]>0,'navyblue','tomato')
+       ,ylab = '',xlab = paste(expression(rho),'=',r),lwd = 2)
+  grid()
+  abline(h = 0,v = 0,col = 'green', lwd = 2)
+  
+  
+}
+
+
+```
+
+## Mean and variance under $H_0$
+
+-   $\mathbb{E}_{H_0} (\tau) = 0$
+-   $\mathbb{V}_{H_0} (\tau) = \dfrac{2(2n+5)}{9n(n-1)}$
+
+Here we take 1000 sample of size 10 each and calculate the mean and variance of the Kendall's $\tau$ based on these 1000 values.
+
+```{r}
+sam = ktao(n = 10,size = 1000,rnorm,runif)
+
+
+out = matrix(c(0,(2*((2*10)+5)/(9*10*(10-1))),mean(sam),var(sam)),ncol = 2,byrow = F)
+rownames(out) = c('mean','variance')
+colnames(out) = c('Theoritical','Observed')
+kbl(out,format = "html",caption = 'N(0,1), U(0,1), n = 10') %>%
+kable_styling(bootstrap_options = c("striped", "hover","condensed", "responsive"))
+
+```
+
+## Distribution free: EDA
+
+We know that Kendal's Tao test statistics is distribution free under $H_0$ .We will verify it here visually.Here we will generate data from various distribution independently and plot the histogram of the Kendal's $\tau$ .
+
+```{r}
+
+set.seed(1236)
+par(mfrow = c(2,2))
+
+hist(ktao(n = 10,size = 1000,rnorm,runif),prob = TRUE , xlab = 'value',
+     col = sample(colors()[-c(136:234,151:361)],1), main = 'N(0,1) and U(0,1)')
+hist(ktao(n = 10,size = 1000, rnorm,rcauchy),prob = TRUE, xlab = 'value',
+     col = sample(colors()[-c(136:234,151:361)],1), main = 'N(0,1) and C(0,1)')
+hist(ktao(n = 10,size = 1000, rexp,runif),prob = TRUE, xlab = 'value',
+     col = sample(colors()[-c(136:234,151:361)],1), main = 'exp(1) and U(0,1)' )
+hist(ktao(n = 10,size = 1000, rnorm,rlaplace ),prob = TRUE, xlab = 'value',
+     col = sample(colors()[-c(136:234,151:361)],1), main = 'N(0,1) and Laplace(0,1)' )
+
+par(mfrow = c(1,1))
+```
+
+## Large sample test:
+
+<font size="5"> $\sqrt{\dfrac{9n(n-1)}{2(2n+5)}}\tau \overset{\mathcal{d}}{\Longrightarrow} N(0,1)$ as $n\rightarrow \infty$ </font>
+
+```{r}
+
+
+
+
+par(mfrow=c(2,2))
+for(n in c(8,10,15,20)){
+l.sam = sqrt((9*n*(n-1))/(2*(2*n+5)))*ktao(n,size = 1e3,rnorm,rexp)
+hist(l.sam, prob = TRUE,col = 'cadetblue1',breaks = 30, 
+     sub = paste('n = ',n),main = "N(0,1) and exp(1)",xlab = 'value')
+curve(dnorm(x),add = TRUE, col = 'darkorchid')
+}
+mtext("Here will verify the asymptotic normality",outer=T,line=-1)
+
+```
+
+**Comment**: Good fit
+
+## QQplot
+
+```{r, results='hide',message=FALSE}
+set.seed(1234)
+n = 20
+l.sam = sqrt((9*n*(n-1))/(2*(2*n+5)))*ktao(n = 30,size = 1e3,rnorm,rexp)
+qqPlot(l.sam, ylab = 'Theoritical Quantiles', main = 'n = 20')
+```
+
+## Large sample Power curve for $\mathcal{N}_2(0,0,1,1,\rho)$
+
+We take n i.i.d samples from $\mathcal{N}_2(0,0,1,1,\rho)$ test for: $$H_0: \rho = 0 \hspace{0.3cm}vs\hspace{0.3cm}H_a: \rho\not=0$$ test statistic: $$\sqrt{\dfrac{9n(n-1)}{2(2n+5)}}\hat\tau $$ test rule: Reject $H_0$ at size 0.05 if $\left|\sqrt{\dfrac{9n(n-1)}{2(2n+5)}}\hat\tau\right|>\mathcal{z}_{0.025}$
+
+<font size="5">
+
+## Visualisation
+
+```{r,echo = FALSE}
+
+##new variation of ktao: it takes two sample x and y with size n
+
+
+ 
+
+ktao.bvn = function(s.size = 1000,r){
+    
+    
+      n = s.size
+      sam = mvrnorm(n = s.size, mu = c(0,0), 
+                    Sigma = matrix(c(1, r, r, 1), 
+                                   ncol = 2))
+      
+      x = sam[,1]
+      y = sam[,2]
+      k = 1
+      store = NULL
+      for(i in 1:(n-1)){
+        for(j in (i+1):n){
+          store[k] = sign(x[i]-x[j])*sign(y[i]-y[j])
+          k = k+1
+        }
+      }
+  sum(store)/choose(n,2)
+    }
+```
+
+```{r}
+  
+vec = seq(from = -0.5, to = 0.5, length = 60)
+
+#for n = 10
+
+pow = NULL
+i = 1
+
+for(j in vec){
+  
+  pow[i] = sum(replicate(500, (abs(sqrt((9*10*(10-1))/(2*(2*10+5)))*ktao.bvn(s.size = 10,r = j)) > 1.95)))/500
+  i=i+1
+}
+plot(vec,pow,type="l",col = 5, lwd = 2,
+     main = 'Power function for different sample size', ylab = 'probability',
+     xlab = expression(rho),ylim = c(0,1))
+abline(h = 0.05, col = 'navyblue', lty = 3, lwd = 1.2)
+
+#for n = 30, 40, 50
+
+l = 6
+for(n in c(30,40,50)){
+  
+  pow = NULL
+  i=1
+  
+  for(j in vec){
+    
+    pow[i] = sum(replicate(500, (abs(sqrt((9*n*(n-1))/(2*(2*n+5)))*ktao.bvn(s.size = n,r = j)) > qnorm(0.975))))/500
+    i=i+1
+  }
+  lines(vec, pow,col = l,ylab = '',lwd = 2)
+  l = l + 1
+  
+}
+
+legend('bottomright',legend = c(10,30,40,50), title = 'sample size',
+       col = 5:8, lty = rep(1,4),merge = TRUE, cex = 0.8)
+
+```
+
+</font>
+
+## Spearman's $\rho$ vs kendall's $\tau$
+
+For fix sample size(n = 30) we plot power function for spearman $\rho$ and kendall's $\tau$ with respect to $\rho$
+
+```{r,echo=FALSE}
+sprho.bvn = function(s.size,r){
+  
+  
+  srho = NULL
+  sam = mvrnorm(n = s.size, mu = c(0,0), 
+     Sigma = matrix(c(1, r, r, 1), 
+                    ncol = 2))
+    x = sam[,1]
+    y = sam[,2]
+    n = s.size
+    R = rank(x)
+    Q = rank(y)
+    a = 12/(n*(n**2-1))
+    b = 3*(n+1)/(n-1)
+    srho = a*sum(R*Q) - b
+    srho}
+
+```
+
+```{r}
+vec = seq(from = -0.5, to = 0.5, length = 60)
+#for n = 30
+
+pow = NULL
+i = 1
+for(j in vec){
+  
+  pow[i] = sum(replicate(500, (abs(sqrt((9*30*(30-1))/(2*(2*30+5)))*ktao.bvn(s.size = 30,r = j)) > 1.95)))/500
+  i=i+1
+}
+plot(vec,pow,type="l",col = 5, lwd = 2,
+     main = '', ylab = 'probability',sub = paste('n = ', 30),
+     xlab = expression(rho),ylim = c(0,1))
+abline(h = 0.05, col = 'navyblue', lty = 3, lwd = 1.2)
+
+#for spearman
+
+pow = NULL
+i = 1
+
+for(j in vec){
+  
+  pow[i] = sum(replicate(500, (abs(sqrt(30 -1)*sprho.bvn(s.size = 30,r = j)) > 1.95)))/500
+  i=i+1
+}
+lines(vec,pow,type="l",col = 6, lwd = 2)
+legend('top',col=c(6,5),lwd = rep(2,2),legend = c('spearman rho','kendalls tau'))
+
+```
+
+From this plot also we can conclude that testing with these two statistics are equivalent.
+
+# Comparison with parametric test
+
+## Kendalls tau and t-test for BVN
+
+$(X_1,Y_1),(X_2,Y_2),\ldots(X_n,Y_n)\overset{iid}{\sim}\mathcal{N}_2(0,0,1,1,\rho)$
+
+Test for: $$H_0: \rho = 0 \hspace{0.3cm}vs\hspace{0.3cm}H_a: \rho\not=0$$ Test Statistics under $H_0$:
+
+$$T = \dfrac{r\sqrt{n-1}}{\sqrt{1-r^2}}\overset{H_0}\sim t_{n-2} $$ **Rejection rule**: Reject $H_0$ at size $\alpha = 0.05$ if $\left|T_{obs}\right|>t_{0.025,n-2}$
+
+<font size="5">
+
+## Visualisation
+
+Samples are taken from bivariate normal and plot the power function of t-test and kendalls $\tau$ to compare them.
+
+```{r}
+
+vec = seq(from = -0.5, to = 0.5, length =  100)
+
+par(mfrow = c(1,2))
+
+for(s in c(20,35)){
+
+pow1 = NULL
+pow2 = NULL
+i = 1
+
+for(j in vec){
+
+  pow1[i] = sum(replicate(500, (abs(sqrt((9*s*(s-1))/(2*(2*s+5)))*ktao.bvn(s.size = s,r = j)) > 1.95)))/500
+  pow2[i] = sum(replicate(500,{sam = mvrnorm(n = s, mu = c(0,0),
+                                            Sigma = matrix(c(1, j, j, 1),
+                                                           ncol = 2))
+  abs(cor.test(sam[,1],sam[,2])$statistic ) > qt(0.025,df = s-2, lower.tail = F)}  ))/500
+
+
+
+  i=i+1
+}
+plot(vec,pow1,type="l",col = 5, lwd = 2,
+     sub = paste( ' n = ',s), ylab = 'probability',
+     xlab = expression(rho),ylim = c(0,1))
+abline(h = 0.05, col = 'navyblue', lty = 3, lwd = 1.2)
+lines(vec, pow2,col = 6,ylab = '',lwd = 2)
+
+legend('top',col=c(5,6),lwd = rep(2,2),legend = c('kendalls tau','parametric test'), cex = 0.8)
+}
+mtext('Power function for kendalls tau and parametric test', outer = T, line = -1)
+
+
+```
+
+<font color="red">$\textbf{Comment}$:</font> t-test performs better </font>
+
+## When sample is not comming from Normal Distribution
+
+-   Now we generate bivariate sample of size 20 from (F(7,4),U(0,1)) using gaussian copula.
+
+```{r, echo=FALSE}
+gaucop=function(n,rho=0,funx=qnorm,funy=qnorm,...)
+{
+  sigma=matrix(c(1,rho,rho,1),nr=2)
+  
+  data=mvrnorm(n=n,mu=c(0,0),Sigma=sigma)
+  u1=pnorm(data[,1])
+  u2=pnorm(data[,2])
+  z1=funx(u1,...)
+  z2=funy(u2)
+ 
+  
+  cbind(z1,z2)}
+```
+
+```{r}
+
+vec = seq(from = -0.5, to = 0.5, length = 60)
+
+#for n = 20
+
+pow1 = NULL
+pow2 = NULL
+i = 1
+
+for(j in vec){
+
+  pow1[i] = sum(replicate(500, {sam = gaucop(n = 20,rho = j,funx = qf,funy = qunif,df1=7,df2 = 4)
+    abs(as.vector(cor.test(sam[,1],sam[,2],
+        method = 'kendall')$estimate)) > 0.326}))/500
+  pow2[i] = sum(replicate(500,{sam = gaucop(n = 20,rho = j,funx = qf,funy = qunif,df1=7,df2 = 4)
+  abs(cor.test(sam[,1],sam[,2])$statistic ) > qt(0.025,df = 18, lower.tail = F)}  ))/500
+
+
+
+  i=i+1
+}
+plot(vec,pow1,type="l",col = 5, lwd = 2,
+     main = 'Power function for kendalls tau and parametric test ', ylab = 'probability',sub = 'n = 20',
+     xlab = expression(rho),ylim = c(0,1))
+abline(h = 0.05, col = 'navyblue', lty = 3, lwd = 1.2)
+lines(vec, pow2,col = 6,ylab = '',lwd = 2)
+
+legend('top',col=c(5,6),lwd = rep(2,2),legend = c('kendalls tau','parametric test'), cex = 0.8)
+
+
+```
+
+<font color="red">$\textbf{Comment}$:</font> Kendall's $\tau$ performs better
+
+# Copula
+
+## Gaussian Copula
+
+### Algorithm Generating data from Gaussian Copula (To generate $(Z_1, Z_2)$ with correlation coefficient $\rho$ and marginals $G_1$ and $G_2$ ) {style="size:3"}
+
+-   Generate $(X_1, X_2)$ from bivariate normal distribution with mean vector $\textbf{0}$ and variance covariance matrix Σ such that $\sigma_{ii} = 1$ and $\sigma_{ij} = \rho$
+-   $U_i = \Phi^{-1}(X_i)$, for $i = 1, 2$ $Z_i = G_i(U_i)$, for $i = 1, 2$. $(Z_1, Z_2)$ is the required data point
+
+```{r,echo=FALSE}
+
+bvncop=function(n,size=1000,rho=0,funx=qnorm,funy=qnorm,...)
+{
+  sigma=matrix(c(1,rho,rho,1),nr=2)
+  kt = NULL
+  for(m in 1:size){
+  data=mvrnorm(n=n,mu=c(0,0),Sigma=sigma)
+  u1=pnorm(data[,1])
+  u2=pnorm(data[,2])
+  z1=funx(u1,...)
+  z2=funy(u2)
+  kt[m] = as.vector(cor.test(z1,z2,method = 'kendall')$estimate)
+  }
+  
+  kt}
+```
+
+## FGM Copula
+
+$C(u_1, u_2;\theta)$= $uv(1+\theta(1-u)(1-v))$
+
+where $u_i \in(0,1)$ for \$i=1,2,\\, and $\theta\in(-1,1)$. Here, $\theta$ is the dependence parameter controlling the tail dependence.
+
+```{r,echo=FALSE}
+#parameters: cov = 0(i.e. under H0),
+fgmcop = function(n,size,cov,...)
+{ kt = NULL
+  for(m in 1:size){
+  myCop = fgmCopula(param = cov, dim = 2)
+  myMvd = mvdc(copula = myCop, ...)	
+  
+  x = rMvdc(n, myMvd)
+  kt[m] = as.vector(cor.test(x[,1],x[,2],method = 'kendall')$estimate)
+  }
+  
+  kt}
+  
+
+```
+
+## Gumbel copula
+
+$C(u_1, u_2, \ldots, u_d;\theta)$ = $\exp\left(-\left(\sum_{i=1}^{d} (-\ln u_i)^{\theta}\right)^{1/\theta}\right)$
+
+where $u_i \in(0,1)$ for $i=1,2,\ldots,d$, and $\theta>1$. Here $\theta$ is the dependence parameter controlling the tail dependence.
+
+```{r,echo=FALSE}
+#----------theta in 1 to infinity
+gumbelcop = function(n,size,cov,...)
+{ kt = NULL
+for(m in 1:size){
+  myCop = gumbelCopula(param = cov, dim = 2)
+  myMvd = mvdc(copula = myCop, ...)	
+  
+  x = rMvdc(n, myMvd)
+  kt[m] = as.vector(cor.test(x[,1],x[,2],method = 'kendall')$estimate)
+}
+
+kt}
+```
+
+# Distribution free Statistics: Sample from copula with n = 5
+
+## Gaussian Copula
+
+```{r}
+par(mfrow = c(2,2))
+
+hist( bvncop(n = 5,size = 1000,rho = 0,funx = qbeta,funy = qexp,shape1 = 5,shape2 = 3),breaks = 30,prob = TRUE ,sub = 'n = 5',
+      ,col = sample(colors()[-c(136:234,151:361)],1),main = 'beta(5,3) and exp(1)',xlab = 'value')
+hist(bvncop(n = 5,size = 1000,rho = 0,funx = qlogis,funy = qnorm,location = 6,scale = 2),breaks = 30,prob = TRUE ,sub = 'n = 5',
+     ,col = sample(colors()[-c(136:234,151:361)],1),main = 'logistic(6,2) and n(0,1)',xlab = 'value')
+hist(bvncop(n = 5,size = 1000,rho = 0,funx = qf,funy = qunif,df1=7,df2 = 4),breaks = 30,
+     prob = TRUE, sub = 'n = 5',
+     ,col = sample(colors()[-c(136:234,151:361)],1),main = 'F(7,4) and u(0,1)',xlab = 'value')
+hist(bvncop(n = 5,size = 1000,rho = 0,funx = qunif,funy = qnorm,min = -5,max = 10),breaks = 30,prob = TRUE
+   ,sub = 'n = 5',col = sample(colors()[-c(136:234,151:361)],1),main = 'u(-5,10) and n(0,1)',xlab = 'value')
+
+
+```
+
+## FGM Copula
+
+```{r}
+par(mfrow = c(2,2))
+
+hist( fgmcop(n = 5,size=1000,cov = 0,margins = c("exp", "beta"),
+             paramMargins = list(list(rate = 2), 
+                                 list(shape1 = 5, shape2 = 2))),sub = 'n = 5',breaks = 30,prob = TRUE 
+      ,col = sample(colors()[-c(136:234,151:361)],1),main = 'exp(rate = 2) and beta(5,2)',xlab = 'value')
+hist(fgmcop(n = 5,size=1000,cov = 0,margins = c("logis", "unif"),
+            paramMargins = list(list(location = 6,scale = 2), 
+                                list(min = -10,max= 20))),sub = 'n = 5',breaks = 30,prob = TRUE
+     ,col = sample(colors()[-c(136:234,151:361)],1),main = 'logistic(6,2) and u(-10,20)',xlab = 'value')
+hist(fgmcop(n = 5,size=1000,cov = 0,margins = c("gamma", "t"),
+            paramMargins = list(list(shape = 10, rate = 2), 
+                                list(df = 9))),breaks = 30,prob = TRUE
+     ,col = sample(colors()[-c(136:234,151:361)],1),sub = 'n = 5',main = 'gamma(10,2) and t(9)',xlab = 'value')
+hist( fgmcop(n = 5,size=1000,cov = 0,margins = c("unif", "norm"),
+             paramMargins = list(list(min = -5,max = 10), 
+                                 list(mean = 3,sd = 3))),sub = 'n = 5',breaks = 30,prob = TRUE
+      ,col = sample(colors()[-c(136:234,151:361)],1),main = 'u(-5,10) and n(3,9)',xlab = 'value')
+
+
+```
+
+## Gumbel Copula
+
+```{r, results='hide',message=FALSE}
+par(mfrow = c(2,2))
+
+hist( gumbelcop(n = 5,size=1000,cov = 1,margins = c("exp", "beta"),
+             paramMargins = list(list(rate = 2), 
+                                 list(shape1 = 5, shape2 = 2))),sub = 'n = 5',breaks = 30,prob = TRUE 
+      ,col = sample(colors()[-c(136:234,151:361)],1),main = 'exp(rate = 2) and beta(5,2)',xlab = 'value')
+hist(gumbelcop(n = 5,size=1000,cov = 1,margins = c("logis", "unif"),
+            paramMargins = list(list(location = 6,scale = 2), 
+                                list(min = -10,max= 20))),sub = 'n = 5',breaks = 30,prob = TRUE
+     ,col = sample(colors()[-c(136:234,151:361)],1),main = 'logistic(6,2) and u(-10,20)',xlab = 'value')
+hist(gumbelcop(n = 5,size=1000,cov = 1,margins = c("gamma", "t"),
+            paramMargins = list(list(shape = 10, rate = 2), 
+                                list(df = 9))),breaks = 30,prob = TRUE
+     ,col = sample(colors()[-c(136:234,151:361)],1),sub = 'n = 5',main = 'gamma(10,2) and t(9)',xlab = 'value')
+hist( gumbelcop(n = 5,size=1000,cov = 1,margins = c("unif", "norm"),
+             paramMargins = list(list(min = -5,max = 10), 
+                                 list(mean = 3,sd = 3))),sub = 'n = 5',breaks = 30,prob = TRUE
+      ,col = sample(colors()[-c(136:234,151:361)],1),main = 'u(-5,10) and n(3,9)',xlab = 'value')
+
+
+
+```
+
+# Distribution free Statistics: Sample from copula with n = 10
+
+## Gaussian Copula
+
+```{r}
+
+par(mfrow = c(2,2))
+
+hist( bvncop(n=10,size = 1000,rho = 0,funx = qbeta,funy = qexp,shape1 = 5,shape2 = 3),breaks = 30,prob = TRUE ,sub = 'n = 10'
+      ,col = sample(colors()[-c(136:234,151:361)],1),main = 'beta(5,3) and exp(1)',xlab = 'value')
+hist(bvncop(n=10,size = 1000,rho = 0,funx = qlogis,funy = qnorm,location = 6,scale = 2),breaks = 30,prob = TRUE, sub = 'n = 10'
+     ,col = sample(colors()[-c(136:234,151:361)],1),main = 'logistic(6,2) and n(0,1)',xlab = 'value')
+hist(bvncop(n=10,size = 1000,rho = 0,funx = qf,funy = qunif,df1=7,df2 = 4),breaks = 30,prob = TRUE
+   , sub = 'n = 10' ,col = sample(colors()[-c(136:234,151:361)],1),main = 'F(7,4) and u(0,1)',xlab = 'value')
+hist(bvncop(n=10,size = 1000,rho = 0,funx = qunif,funy = qnorm,min = -5,max = 10),breaks = 30,prob = TRUE
+   ,sub = 'n = 10'  ,col = sample(colors()[-c(136:234,151:361)],1),main = 'u(-5,10) and n(0,1)',xlab = 'value')
+
+
+```
+
+## FGM Copula
+
+```{r}
+
+par(mfrow = c(2,2))
+
+hist( fgmcop(n=10,size=1000,cov = 0,margins = c("exp", "beta"),
+             paramMargins = list(list(rate = 2), 
+                                 list(shape1 = 5, shape2 = 2))),breaks = 30,prob = TRUE ,sub = 'n = 10'
+      ,col = sample(colors()[-c(136:234,151:361)],1),main = 'exp(rate = 2) and beta(5,2)',xlab = 'value')
+hist(fgmcop(n=10,size=1000,cov = 0,margins = c("logis", "unif"),
+            paramMargins = list(list(location = 6,scale = 2), 
+                                list(min = -10,max= 20))),breaks = 30,prob = TRUE,sub = 'n = 10'
+     ,col = sample(colors()[-c(136:234,151:361)],1),main = 'logistic(6,2) and u(-10,20)',xlab = 'value')
+hist(fgmcop(n=10,size=1000,cov = 0,margins = c("gamma", "t"),
+            paramMargins = list(list(shape = 10, rate = 2), 
+                                list(df = 9))),breaks = 30,prob = TRUE,sub = 'n = 10'
+     ,col = sample(colors()[-c(136:234,151:361)],1),main = 'gamma(10,2) and t(9)',xlab = 'value')
+hist( fgmcop(n=10,size=1000,cov = 0,margins = c("unif", "norm"),
+             paramMargins = list(list(min = -5,max = 10), 
+                                 list(mean = 3,sd = 3))),breaks = 30,prob = TRUE,sub = 'n = 10'
+     ,col = sample(colors()[-c(136:234,151:361)],1),main = 'u(-5,10) and n(3,9)',xlab = 'value')
+
+
+
+
+```
+
+## Gumbel copula
+
+```{r, results='hide',message=FALSE}
+
+par(mfrow = c(2,2))
+
+hist( gumbelcop(n=10,size=1000,cov = 1,margins = c("exp", "beta"),
+             paramMargins = list(list(rate = 2), 
+                                 list(shape1 = 5, shape2 = 2))),breaks = 30,prob = TRUE ,sub = 'n = 10'
+      ,col = sample(colors()[-c(136:234,151:361)],1),main = 'exp(rate = 2) and beta(5,2)',xlab = 'value')
+hist(gumbelcop(n=10,size=1000,cov = 1,margins = c("logis", "unif"),
+            paramMargins = list(list(location = 6,scale = 2), 
+                                list(min = -10,max= 20))),breaks = 30,prob = TRUE,sub = 'n = 10'
+     ,col = sample(colors()[-c(136:234,151:361)],1),main = 'logistic(6,2) and u(-10,20)',xlab = 'value')
+hist(gumbelcop(n=10,size=1000,cov = 1,margins = c("gamma", "t"),
+            paramMargins = list(list(shape = 10, rate = 2), 
+                                list(df = 9))),breaks = 30,prob = TRUE,sub = 'n = 10'
+     ,col = sample(colors()[-c(136:234,151:361)],1),main = 'gamma(10,2) and t(9)',xlab = 'value')
+hist( gumbelcop(n=10,size=1000,cov = 1,margins = c("unif", "norm"),
+             paramMargins = list(list(min = -5,max = 10), 
+                                 list(mean = 3,sd = 3))),breaks = 30,prob = TRUE,sub = 'n = 10'
+     ,col = sample(colors()[-c(136:234,151:361)],1),main = 'u(-5,10) and n(3,9)',xlab = 'value')
+
+
+
+```
+
+## Large sample Distn:
+
+$$\sqrt{\dfrac{9n}{4}}\tau\overset{\mathcal{d}}{\Longrightarrow}N(0,1)\hspace{0.4cm} as\hspace{0.4cm} n \rightarrow\infty$$
+
+```{r}
+plt_normal=function(n,rho=0)
+{
+sam = bvncop(n=n,size = 1000,rho = 0,funx = qbeta,funy = qexp,shape1 = 5,shape2 = 3)
+hist( sqrt(9*n/4)*sam
+      ,breaks = 30,prob = TRUE, sub = paste("n=",n) 
+      ,col = sample(colors()[-c(136:234,151:361)],1),main = 'beta(5,3) and exp(1)',xlab = 'value')
+
+curve(dnorm(x),add = T,col = sample(colors()[-c(136:234,151:361)],1),lwd = 2)
+}
+
+par(mfrow=c(2,2))
+for(n in c(15,20,25,30))
+{
+  plt_normal(n)
+}
+
+par(mfrow = c(1,1))
+
+```
+
+## qqPlot
+
+```{r, results='hide',message=FALSE}
+par(mfrow=c(2,3))
+for(n in c(10,15,20,25,30,35))
+{
+qqPlot(sam,main = "n=35")
+}
+```
+
+
+
+# Power comparison
+
+## Gaussian Copula(U(-5,10),N(0,1)) for different n
+
+```{r}
+vec = seq(from = -0.7, to = 0.7, length = 80)
+
+
+#for n = 10
+
+
+pow = NULL
+i = 1
+
+for(j in vec){
+  
+  pow[i] = sum(replicate(600, (abs(sqrt(10*9/4)*bvncop(n = 10,size = 1,rho = j,funx = qunif,funy = qnorm,min = -5,max = 10)) > 1.95)))/600
+  i=i+1
+}
+plot(vec,pow,type="l",col = 5, lwd = 2,
+     main = 'using gaussian copula U(-5,10) and N(0,1)', ylab = 'probability',
+     xlab = expression(rho),ylim = c(0,1))
+abline(h = 0.05, col = 'navyblue', lty = 3, lwd = 1.2)
+
+#for n = 25, 35, 40
+
+l = 6
+for(n in c(25, 30, 40)){
+  
+  pow = NULL
+  i=1
+  
+  for(j in vec){
+    
+    pow[i] = sum(replicate(600, (abs(sqrt(n*9/4)*bvncop(n = n,size = 1,rho = j,funx = qunif,funy = qnorm,min = -5,max = 10)) > 1.95)))/600
+    i=i+1
+  }
+  lines(vec, pow,col = l,ylab = '',lwd = 2)
+  l = l + 1
+  
+}
+
+legend('bottomright',legend = c(10,25,35,40), title = 'sample size',
+       col = 5:8, lty = rep(1,4),merge = TRUE, cex = 0.8)
+
+```
+
+## FGM Copula
+
+```{r}
+vec = seq(from = -0.7, to = 0.7, length = 100)
+ n = 15
+  pow = NULL
+  i=1
+  
+  for(j in vec){
+    
+    pow[i] = mean(replicate(700,
+                            {abs(sqrt(9*n/4)*fgmcop(n = n,size=1,cov = j,margins = c("exp", "beta"),
+             paramMargins = list(list(rate = 2), 
+                                 list(shape1 = 5, shape2 = 2))))> 1.96}))
+    i=i+1
+  }
+  
+  plot(vec, pow, col = 5, type = 'l' , lwd  = 2, 
+       main = 'exp(2) and Beta(5,2)')
+
+
+l = 6
+for(n in c( 20, 25)){
+  
+  pow = NULL
+  i=1
+  
+  for(j in vec){
+    
+    pow[i] = mean(replicate(700,
+                            {abs(sqrt(9*n/4)*fgmcop(n = n,size=1,cov = j,margins = c("exp", "beta"),
+             paramMargins = list(list(rate = 2), 
+                                 list(shape1 = 5, shape2 = 2))))> 1.96}))
+    i=i+1
+  }
+  lines(vec, pow,col = l,ylab = '',lwd = 2)
+  l = l + 1
+  
+}
+
+legend('bottomright',legend = c(15,20,25), title = 'sample size',
+       col = 5:7, lty = rep(1,3),merge = TRUE, cex = 0.8)
+
+```
+
+## Gumbel Copula
+
+```{r, results='hide', message=FALSE}
+vec = seq(from =1, to = 2, length = 100)
+ n = 25
+  pow = NULL
+  i=1
+  
+  for(j in vec){
+    
+    pow[i] = mean(replicate(500,
+                            {abs(sqrt(n*9/4)*gumbelcop(n = n,size=1,cov = j,margins = c("exp", "beta"),
+             paramMargins = list(list(rate = 2), 
+                                 list(shape1 = 5, shape2 = 2))))> 1.95}))
+    i=i+1
+  }
+  
+  plot(vec, pow, col = 5, type = 'l' , lwd  = 2, 
+       main = 'exp(2) and Beta(5,2)')
+
+
+l = 6
+for(n in c( 30, 40)){
+  
+  pow = NULL
+  i=1
+  
+  for(j in vec){
+    
+    pow[i] = mean(replicate(500,
+                            {abs(sqrt(n*9/4)*gumbelcop(n = n,size=1,cov = j,margins = c("exp", "beta"),
+             paramMargins = list(list(rate = 2), 
+                                 list(shape1 = 5, shape2 = 2))))> 1.95}))
+    i=i+1
+  }
+  lines(vec, pow,col = l,ylab = '',lwd = 2)
+  l = l + 1
+  
+}
+
+legend('bottomright',legend = c(25,30,40), title = 'sample size',
+       col = 5:7, lty = rep(1,3),merge = TRUE, cex = 0.8)
+
+
+```
+
+## FGM and Gumbel Copula(With one sided interval)
+
+generating c(0,1) and laplace(0,1)
+
+$H_0$:$\rho=0$ vs $H_1:\rho>0$
+
+```{r}
+powe_fgm=NULL
+powe_gum=NULL
+i=1
+rho_vec=seq(0,1,length=100)
+for(rho in rho_vec )
+{
+  n=20
+  ## ------------ sam=fgmcop(n=10,size=1000,cov=rho,funx=qcauchy,funy=qlaplace)
+  sam1=fgmcop(n = 20,size=1000,cov = rho,margins = c("cauchy", "laplace"),
+              paramMargins = list(list(scale=1,location=0), 
+                                  list(sigma=1,mu=0)))
+  powe_fgm[i]=mean(sqrt((9*n*(n-1))/(2*(2*n+5)))*sam1>qnorm(0.95))
+  
+  
+  
+  i=i+1
+  
+}
+
+
+
+i=1
+for(rho in rho_vec )
+{
+  sam2=gumbelcop(n = 20,size=1000,cov = 2+rho,margins = c("cauchy", "laplace"),
+                 paramMargins = list(list(scale=1,location=0), 
+                                     list(sigma=1,mu=0)))
+  powe_gum[i]=mean(sqrt((9*n*(n-1))/(4*(2*n+5)))*sam2>qnorm(0.95))
+  i=i+1
+}
+
+
+
+
+par(mfrow = c(1,2))
+plot(rho_vec,powe_fgm,type="l",col="red") 
+# , xlab = expression(rho),  sub = 'n = 20', main = 'c(0,1) and Laplace(0,1)'
+plot(rho_vec+2,powe_gum,col="green")#, xlab = expression(rho), sub = 'n = 20',  main = 'c(0,1) and Laplace(0,1)')
+abline(h=0.05, col = 'blue')
+
+
+```
+
+## Violation of assumptions
+
+Our very first assumption was the continuous setup. We will see what happens if that said assumption is violated.
+
+```{r,echo=FALSE}
+ktao_pois = function(n,size = 1000)
+  {
+  
+  
+  kt = NULL
+  for(m in 1:size){
+    
+    x = rbvpois(n,1,2,3)[,1]
+    y = rbvpois(n,1,2,3)[,2]
+    
+    k = 1
+    store = NULL
+    for(i in 1:(n-1)){
+      for(j in (i+1):n){
+        store[k] = sign(x[i]-x[j])*sign(y[i]-y[j])
+        k = k+1
+      }
+    }
+  kt[m] = sum(store)/choose(n,2)
+    }
+    
+kt}
+
+```
+
+## Distribution free ?
+
+```{r,results='hide',message=FALSE}
+set.seed(1236)
+
+par(mfrow=c(2,2))
+
+hist( as.vector(replicate(1000,cor.test(rpois(10,2),rbinom(n=10,size=10,p=0.5),method = "kendall")$estimate)) , xlab = 'value',
+     col = sample(colors()[-c(136:234,151:361)],1), main = 'Poi(2) and Binom(10,0.5)')
+
+hist(as.vector(replicate(1000,cor.test(rpois(10,3),rpois(10,4),method = "kendall")$estimate)),prob = TRUE , xlab = 'value',
+     col = sample(colors()[-c(136:234,151:361)],1), main = 'Poi(3) and Pois(4)')
+
+hist(as.vector(replicate(1000,cor.test(rbinom(n=5,size=10,p=0.7),rbinom(n=5,size=10,p=0.1),method = "kendall")$estimate)),prob = TRUE , xlab = 'value',
+     col = sample(colors()[-c(136:234,151:361)],1), main = 'Binom(10,0.7) and Binom(10,0.1)')
+
+hist(as.vector(replicate(1000,cor.test(rpois(5,5),rgeom(5,0.3),method = "kendall")$estimate)),prob = TRUE , xlab = 'value',
+     col = sample(colors()[-c(136:234,151:361)],1), main = 'Poi(5) and Geom(0.3)')
+
+```
+
+## Comment
+
+-   If we assume normality t-test will perform better.
+-   Non-Normal cases,Kendal's $\tau$ works better than the conventional t-test and also in Normality cases ,it is not much worse. So when we don't have any information about the underlying population,it's safe to use Kendal's $\tau$ statistics.
+
+## Thought experiment
+
+$x_i\overset{iid}{\sim} U(-1,1)\hspace{1cm}i = 1,2,\ldots,30$
+
+```{r}
+x = runif(30,-1,1)
+y = abs(x)
+plot(x,y, col = 'blue', pch = 20, ylab = expression(abs(x))
+     ,main = 'plot of (x, |x|)', ylim = c(-1,1))
+grid()
+abline(h =0, v = 0 , col = 'red')
+
+cor.test(x,y,method = 'kendall')
+cat('comment: independent sample')
+
+```
+
+## $|x| + |y| = 1$
+
+```{r}
+x1 = runif(30,-1,1) #upper part
+x2 = runif(30,-1,1) #lower part
+plot(x1,1 - abs(x1), col = 'blue', pch = 20, ylab = 'y', xlab = 'x' 
+     ,main = ' |x|+|y| = 1', ylim = c(-1,1))
+lines(x2, abs(x2) - 1, type = 'p', col = 'blue', pch = 20)
+grid()
+abline(h =0, v = 0 , col = 'red')
+
+cor.test(c(x1,x2),c(1 - abs(x1),abs(x2) - 1),method = 'kendall')
+cat('comment: independent sample')
+```
+
+## Dependent sample
+
+$x_i\overset{iid}{\sim} U(-\pi,\pi)\hspace{1cm}i = 1,2,\ldots,40$
+
+```{r}
+x = runif(40,-pi,pi)
+y = sin(x)
+plot(x,y, col = 'blue', pch = 20, ylab = expression(sin(x))
+     ,main = 'plot of (x,sin(x))')
+abline(h =0, v = 0 , col = 'red')
+
+cor.test(x,y,method = 'kendall')
+cat('comment: dependent sample')
+
+```
+
+## Acknowledgement
+
+We want to say a big `thank you` to everyone who helped make this project possible. Special thanks to `Subhrangsu`, `Sourav`, `Subhendu` and to `Isha Dewan ma'am` for helping us.
+
+## Contribution
+
+```{r}
+set.seed(1237)
+cont = c(37.5,25,37.5)
+pie(cont,labels = c('Arpan Dutta', 'Debanjan Bhattacharjee', 'Soumyajit Roy'),col = sample(colors()[-c(136:234,151:361)],3) , clockwise = F, lty = 3, density = 200)
+```
